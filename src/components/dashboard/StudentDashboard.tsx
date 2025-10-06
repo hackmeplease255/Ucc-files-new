@@ -41,6 +41,28 @@ export const StudentDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchIssues();
+
+    // Set up real-time subscription for issues updates
+    const channel = supabase
+      .channel('student-issues-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'issues',
+          filter: `student_id=eq.${user?.id}`
+        },
+        () => {
+          // Refetch issues when any issue is updated
+          fetchIssues();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user]);
 
   const fetchIssues = async () => {
