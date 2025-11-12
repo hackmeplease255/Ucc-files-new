@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_teacher_messages: {
+        Row: {
+          admin_id: number
+          created_at: string
+          id: number
+          is_read: boolean
+          message: string
+          teacher_id: number
+          updated_at: string
+        }
+        Insert: {
+          admin_id: number
+          created_at?: string
+          id?: never
+          is_read?: boolean
+          message?: string
+          teacher_id: number
+          updated_at?: string
+        }
+        Update: {
+          admin_id?: number
+          created_at?: string
+          id?: never
+          is_read?: boolean
+          message?: string
+          teacher_id?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_teacher_messages_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "admins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_teacher_messages_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "teachers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       admins: {
         Row: {
           created_at: string

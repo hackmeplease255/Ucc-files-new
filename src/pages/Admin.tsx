@@ -7,7 +7,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { LogOut, Users, UserCheck, CheckCircle2, UserX, MessageCircle, Download, AlertTriangle, Settings } from 'lucide-react';
+import { LogOut, Users, UserCheck, CheckCircle2, UserX, MessageCircle, Download, AlertTriangle, Settings, Send } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AdminPasswordChange } from '@/components/admin/AdminPasswordChange';
 
 interface Student {
@@ -34,6 +36,7 @@ interface Issue {
   created_at: string;
   read_count: number;
   student_id: number;
+  teacher_id?: number;
   students: {
     name: string;
     university_registration_number: string;
@@ -45,6 +48,15 @@ interface Issue {
     author_type: string;
     created_at: string;
   }[];
+}
+
+interface AdminTeacherMessage {
+  id: number;
+  admin_id: number;
+  teacher_id: number;
+  message: string;
+  is_read: boolean;
+  created_at: string;
 }
 
 export const Admin: React.FC = () => {
@@ -65,10 +77,16 @@ export const Admin: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [expandedIssue, setExpandedIssue] = useState<number | null>(null);
+  const [teacherMessages, setTeacherMessages] = useState<AdminTeacherMessage[]>([]);
+  const [messageText, setMessageText] = useState<{[key: number]: string}>({});
+  const [openMessageDialog, setOpenMessageDialog] = useState<number | null>(null);
+  const [teacherNamesMap, setTeacherNamesMap] = useState<{[key: number]: string}>({});
 
   useEffect(() => {
     fetchAllUsers();
     fetchIssues();
+    fetchTeacherMessages();
+    fetchTeacherNames();
   }, []);
 
   const fetchAllUsers = async () => {
@@ -415,6 +433,73 @@ export const Admin: React.FC = () => {
     setExpandedIssue(expandedIssue === issueId ? null : issueId);
   };
 
+  const fetchTeacherMessages = async () => {
+    const { data, error } = await supabase
+      .from('admin_teacher_messages')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to fetch teacher messages",
+        variant: "destructive",
+      });
+    } else {
+      setTeacherMessages(data || []);
+    }
+  };
+
+  const sendMessageToTeacher = async (teacherId: number) => {
+    if (!user || !messageText[teacherId]?.trim()) return;
+
+    setLoading(true);
+    const { error } = await supabase
+      .from('admin_teacher_messages')
+      .insert({
+        admin_id: user.id,
+        teacher_id: teacherId,
+        message: messageText[teacherId].trim()
+      });
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to send message",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Success",
+        description: "Message sent to teacher successfully",
+      });
+      setMessageText({ ...messageText, [teacherId]: '' });
+      setOpenMessageDialog(null);
+      fetchTeacherMessages();
+    }
+    setLoading(false);
+  };
+
+  const getTeacherMessageCount = (teacherId: number) => {
+    return teacherMessages.filter(m => m.teacher_id === teacherId).length;
+  };
+
+  const fetchTeacherNames = async () => {
+    const { data, error } = await supabase
+      .from('teachers')
+      .select('id, name');
+
+    if (error) {
+      console.error('Error fetching teacher names:', error);
+    } else if (data) {
+      const namesMap = data.reduce((acc, teacher) => {
+        acc[teacher.id] = teacher.name;
+        return acc;
+      }, {} as {[key: number]: string});
+      setTeacherNamesMap(namesMap);
+    }
+  };
+
   const unapproveSelectedStudents = () => {
     if (selectedApprovedStudents.length > 0) {
       unapproveUsers(selectedApprovedStudents, 'students');
@@ -465,7 +550,7 @@ export const Admin: React.FC = () => {
         </div>
 
         <Tabs defaultValue="pending" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 gap-1 mb-6 p-1">
+          <TabsList className="grid w-full grid-cols-4 sm:grid-cols-6 gap-1 mb-6 p-1">
             <TabsTrigger value="pending" className="text-xs sm:text-sm px-2 py-1.5">Pending</TabsTrigger>
             <TabsTrigger value="approved" className="text-xs sm:text-sm px-2 py-1.5">Approved</TabsTrigger>
             <TabsTrigger value="rejected" className="text-xs sm:text-sm px-2 py-1.5">Rejected</TabsTrigger>
@@ -903,13 +988,60 @@ export const Admin: React.FC = () => {
                             <h4 className="font-medium text-sm">Teacher Responses:</h4>
                             {issue.issue_replies.map((reply) => (
                               <div key={reply.id} className="bg-muted/50 rounded-lg p-3 space-y-2">
-                                 <div className="flex justify-between items-center">
-                                  <span className="text-sm font-medium">Teacher</span>
-                                  <span className="text-xs text-muted-foreground">
-                                    {new Date(reply.created_at).toLocaleDateString()}
-                                  </span>
+                                <div className="flex justify-between items-start gap-2">
+                                  <div className="flex-1">
+                                    <div className="flex items-center justify-between mb-2">
+                                      <span className="text-sm font-medium">
+                                        {reply.author_type === 'teacher' 
+                                          ? teacherNamesMap[reply.author_id] || 'Teacher' 
+                                          : 'Teacher'}
+                                      </span>
+                                      <span className="text-xs text-muted-foreground">
+                                        {new Date(reply.created_at).toLocaleDateString()}
+                                      </span>
+                                    </div>
+                                    <p className="text-sm break-words whitespace-pre-wrap">{reply.content}</p>
+                                  </div>
+                                  {reply.author_type === 'teacher' && (
+                                    <Dialog open={openMessageDialog === reply.author_id} onOpenChange={(open) => setOpenMessageDialog(open ? reply.author_id : null)}>
+                                      <DialogTrigger asChild>
+                                        <Button size="sm" variant="outline" className="gap-2 flex-shrink-0">
+                                          <Send className="h-3 w-3" />
+                                          Message
+                                        </Button>
+                                      </DialogTrigger>
+                                      <DialogContent>
+                                        <DialogHeader>
+                                          <DialogTitle>Send Message to {teacherNamesMap[reply.author_id] || 'Teacher'}</DialogTitle>
+                                        </DialogHeader>
+                                        <div className="space-y-4">
+                                          <Textarea
+                                            placeholder="Type your message to the teacher..."
+                                            value={messageText[reply.author_id] || ''}
+                                            onChange={(e) => setMessageText({ ...messageText, [reply.author_id]: e.target.value })}
+                                            rows={5}
+                                          />
+                                          <div className="flex gap-2 justify-end">
+                                            <Button
+                                              variant="outline"
+                                              onClick={() => setOpenMessageDialog(null)}
+                                            >
+                                              Cancel
+                                            </Button>
+                                            <Button
+                                              onClick={() => sendMessageToTeacher(reply.author_id)}
+                                              disabled={loading || !messageText[reply.author_id]?.trim()}
+                                              className="gap-2"
+                                            >
+                                              <Send className="h-4 w-4" />
+                                              Send Message
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      </DialogContent>
+                                    </Dialog>
+                                  )}
                                 </div>
-                                <p className="text-sm break-words whitespace-pre-wrap">{reply.content}</p>
                               </div>
                             ))}
                           </div>

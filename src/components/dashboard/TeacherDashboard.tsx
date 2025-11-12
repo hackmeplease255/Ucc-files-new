@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { LogOut, MessageCircle, Eye, Send, ThumbsUp, AlertCircle, CheckCircle, MessageSquare, Reply } from 'lucide-react';
+import { LogOut, MessageCircle, Eye, Send, ThumbsUp, AlertCircle, CheckCircle, MessageSquare, Reply, Mail } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 
 interface Issue {
   id: number;
@@ -35,6 +36,15 @@ interface Issue {
   }[];
 }
 
+interface AdminMessage {
+  id: number;
+  admin_id: number;
+  teacher_id: number;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+}
+
 export const TeacherDashboard: React.FC = () => {
   const { user, logout } = useAuth();
   const { toast } = useToast();
@@ -45,9 +55,13 @@ export const TeacherDashboard: React.FC = () => {
   const [replyTexts, setReplyTexts] = useState<{[key: number]: string}>({});
   const [showReplyForm, setShowReplyForm] = useState<{[key: number]: boolean}>({});
   const [expandedIssue, setExpandedIssue] = useState<number | null>(null);
+  const [adminMessages, setAdminMessages] = useState<AdminMessage[]>([]);
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+  const [showMessagesDialog, setShowMessagesDialog] = useState(false);
 
   useEffect(() => {
     fetchIssues();
+    fetchAdminMessages();
   }, []);
 
   const fetchIssues = async () => {
@@ -221,6 +235,55 @@ export const TeacherDashboard: React.FC = () => {
     setExpandedIssue(expandedIssue === issueId ? null : issueId);
   };
 
+  const fetchAdminMessages = async () => {
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from('admin_teacher_messages')
+      .select('*')
+      .eq('teacher_id', user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to fetch admin messages",
+        variant: "destructive",
+      });
+    } else {
+      setAdminMessages(data || []);
+      setUnreadMessageCount(data?.filter(m => !m.is_read).length || 0);
+    }
+  };
+
+  const markMessagesAsRead = async () => {
+    if (!user) return;
+
+    const unreadMessages = adminMessages.filter(m => !m.is_read);
+    if (unreadMessages.length === 0) return;
+
+    const { error } = await supabase
+      .from('admin_teacher_messages')
+      .update({ is_read: true })
+      .eq('teacher_id', user.id)
+      .eq('is_read', false);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to mark messages as read",
+        variant: "destructive",
+      });
+    } else {
+      fetchAdminMessages();
+    }
+  };
+
+  const handleOpenMessagesDialog = () => {
+    setShowMessagesDialog(true);
+    markMessagesAsRead();
+  };
+
   const getReactionIcon = (type: string) => {
     switch (type) {
       case 'like': return <ThumbsUp className="h-4 w-4" />;
@@ -377,10 +440,58 @@ export const TeacherDashboard: React.FC = () => {
             <h1 className="text-3xl font-bold">Welcome, {user?.name}!</h1>
             <p className="text-muted-foreground">Teacher Dashboard</p>
           </div>
-          <Button onClick={logout} variant="outline" className="gap-2">
-            <LogOut className="h-4 w-4" />
-            Logout
-          </Button>
+          <div className="flex gap-2">
+            <Dialog open={showMessagesDialog} onOpenChange={setShowMessagesDialog}>
+              <DialogTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  className="gap-2 relative"
+                  onClick={handleOpenMessagesDialog}
+                >
+                  <Mail className="h-4 w-4" />
+                  Admin Messages
+                  {unreadMessageCount > 0 && (
+                    <Badge variant="destructive" className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center p-0 text-xs">
+                      {unreadMessageCount}
+                    </Badge>
+                  )}
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Messages from Admin</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 mt-4">
+                  {adminMessages.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-8">
+                      No messages from admin yet.
+                    </p>
+                  ) : (
+                    adminMessages.map((message) => (
+                      <div 
+                        key={message.id} 
+                        className={`border rounded-lg p-4 ${!message.is_read ? 'bg-accent/10 border-accent' : 'bg-muted/30'}`}
+                      >
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(message.created_at).toLocaleDateString()} at {new Date(message.created_at).toLocaleTimeString()}
+                          </span>
+                          {!message.is_read && (
+                            <Badge variant="destructive" className="text-xs">New</Badge>
+                          )}
+                        </div>
+                        <p className="text-sm break-words whitespace-pre-wrap">{message.message}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+            <Button onClick={logout} variant="outline" className="gap-2">
+              <LogOut className="h-4 w-4" />
+              Logout
+            </Button>
+          </div>
         </div>
 
         <Tabs defaultValue="unread" className="w-full">
