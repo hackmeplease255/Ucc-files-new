@@ -184,7 +184,7 @@ export const StudentDashboard: React.FC = () => {
       <div className="container mx-auto p-6">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold">Welcome, {user?.name}!</h1>
+            <h1 className="text-3xl font-bold">Welcom, {user?.name}!</h1>
             <p className="text-muted-foreground">Student Dashboard</p>
           </div>
           <Button onClick={logout} variant="outline" className="gap-2">
