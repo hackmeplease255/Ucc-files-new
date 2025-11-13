@@ -71,7 +71,7 @@ export const LoginForm: React.FC = () => {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            UCC STUDENT COMPLAINT SYSTEM
+            UC STUDENT COMPLAINT SYSTEM
           </h1>
           <p className="text-muted-foreground mt-2">Welcome back! Please sign in to your account</p>
         </div>
