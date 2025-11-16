@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { LogOut, Users, UserCheck, CheckCircle2, UserX, MessageCircle, Download, AlertTriangle, Settings, Send } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AdminPasswordChange } from '@/components/admin/AdminPasswordChange';
 
@@ -32,6 +33,7 @@ interface Issue {
   id: number;
   title: string;
   description: string;
+  category: string;
   status: string;
   created_at: string;
   read_count: number;
@@ -81,6 +83,8 @@ export const Admin: React.FC = () => {
   const [messageText, setMessageText] = useState<{[key: number]: string}>({});
   const [openMessageDialog, setOpenMessageDialog] = useState<number | null>(null);
   const [teacherNamesMap, setTeacherNamesMap] = useState<{[key: number]: string}>({});
+  const [replyTexts, setReplyTexts] = useState<{[key: number]: string}>({});
+  const [showReplyForm, setShowReplyForm] = useState<{[key: number]: boolean}>({});
 
   useEffect(() => {
     fetchAllUsers();
@@ -498,6 +502,41 @@ export const Admin: React.FC = () => {
       }, {} as {[key: number]: string});
       setTeacherNamesMap(namesMap);
     }
+  };
+
+  const handleReplyToIssue = async (issueId: number) => {
+    if (!user || !replyTexts[issueId]?.trim()) return;
+
+    setLoading(true);
+    
+    // Insert reply to issue_replies so both students and staff can see it
+    const { error: replyError } = await supabase
+      .from('issue_replies')
+      .insert({
+        issue_id: issueId,
+        content: replyTexts[issueId].trim(),
+        author_id: user.id,
+        author_type: 'admin'
+      });
+
+    if (replyError) {
+      toast({
+        title: "Error",
+        description: "Failed to submit reply",
+        variant: "destructive",
+      });
+      setLoading(false);
+      return;
+    }
+
+    toast({
+      title: "Success",
+      description: "Reply submitted successfully",
+    });
+    setReplyTexts({ ...replyTexts, [issueId]: '' });
+    setShowReplyForm({ ...showReplyForm, [issueId]: false });
+    fetchIssues();
+    setLoading(false);
   };
 
   const unapproveSelectedStudents = () => {
@@ -967,7 +1006,10 @@ export const Admin: React.FC = () => {
                               <p>Submitted: {new Date(issue.created_at).toLocaleDateString()}</p>
                             </div>
                           </div>
-                          <div className="flex gap-2 flex-shrink-0">
+                          <div className="flex gap-2 flex-shrink-0 flex-wrap">
+                            <Badge variant="outline" className="text-xs break-words max-w-full">
+                              {issue.category}
+                            </Badge>
                             <Badge variant={issue.read_count === 0 ? "destructive" : "secondary"}>
                               {issue.read_count === 0 ? "Unread" : `Read by ${issue.read_count}`}
                             </Badge>
@@ -985,16 +1027,18 @@ export const Admin: React.FC = () => {
 
                         {issue.issue_replies && issue.issue_replies.length > 0 && (
                           <div className="space-y-2">
-                            <h4 className="font-medium text-sm">Teacher Responses:</h4>
+                            <h4 className="font-medium text-sm">Responses:</h4>
                             {issue.issue_replies.map((reply) => (
                               <div key={reply.id} className="bg-muted/50 rounded-lg p-3 space-y-2">
                                 <div className="flex justify-between items-start gap-2">
                                   <div className="flex-1">
                                     <div className="flex items-center justify-between mb-2">
                                       <span className="text-sm font-medium">
-                                        {reply.author_type === 'teacher' 
-                                          ? teacherNamesMap[reply.author_id] || 'Teacher' 
-                                          : 'Teacher'}
+                                        {reply.author_type === 'admin' 
+                                          ? 'Admin'
+                                          : reply.author_type === 'teacher' 
+                                            ? teacherNamesMap[reply.author_id] || 'Staff' 
+                                            : 'Staff'}
                                       </span>
                                       <span className="text-xs text-muted-foreground">
                                         {new Date(reply.created_at).toLocaleDateString()}
@@ -1012,11 +1056,11 @@ export const Admin: React.FC = () => {
                                       </DialogTrigger>
                                       <DialogContent>
                                         <DialogHeader>
-                                          <DialogTitle>Send Message to {teacherNamesMap[reply.author_id] || 'Teacher'}</DialogTitle>
+                                          <DialogTitle>Send Message to {teacherNamesMap[reply.author_id] || 'Staff'}</DialogTitle>
                                         </DialogHeader>
                                         <div className="space-y-4">
                                           <Textarea
-                                            placeholder="Type your message to the teacher..."
+                                            placeholder="Type your message to the staff member..."
                                             value={messageText[reply.author_id] || ''}
                                             onChange={(e) => setMessageText({ ...messageText, [reply.author_id]: e.target.value })}
                                             rows={5}
@@ -1046,6 +1090,53 @@ export const Admin: React.FC = () => {
                             ))}
                           </div>
                         )}
+                        
+                        {/* Admin Reply Form */}
+                        <div className="pt-3 border-t">
+                          {!showReplyForm[issue.id] ? (
+                            <Button
+                              onClick={() => setShowReplyForm({ ...showReplyForm, [issue.id]: true })}
+                              size="sm"
+                              className="gap-2"
+                              variant="outline"
+                            >
+                              <MessageCircle className="h-4 w-4" />
+                              Reply as Admin
+                            </Button>
+                          ) : (
+                            <div className="space-y-3">
+                              <Label htmlFor={`reply-${issue.id}`}>Your Reply</Label>
+                              <Textarea
+                                id={`reply-${issue.id}`}
+                                placeholder="Type your reply to the student..."
+                                value={replyTexts[issue.id] || ''}
+                                onChange={(e) => setReplyTexts({ ...replyTexts, [issue.id]: e.target.value })}
+                                rows={3}
+                              />
+                              <div className="flex gap-2">
+                                <Button
+                                  onClick={() => handleReplyToIssue(issue.id)}
+                                  disabled={loading || !replyTexts[issue.id]?.trim()}
+                                  size="sm"
+                                  className="gap-2"
+                                >
+                                  <Send className="h-4 w-4" />
+                                  Send Reply
+                                </Button>
+                                <Button
+                                  onClick={() => {
+                                    setShowReplyForm({ ...showReplyForm, [issue.id]: false });
+                                    setReplyTexts({ ...replyTexts, [issue.id]: '' });
+                                  }}
+                                  size="sm"
+                                  variant="outline"
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>

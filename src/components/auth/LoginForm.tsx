@@ -98,7 +98,7 @@ export const LoginForm: React.FC = () => {
                 </TabsTrigger>
                 <TabsTrigger value="teacher" className="flex items-center gap-2">
                   <BookOpen className="h-4 w-4" />
-                  Teacher
+                  Staff
                 </TabsTrigger>
                 <TabsTrigger value="admin" className="flex items-center gap-2">
                   <Shield className="h-4 w-4" />
@@ -212,7 +212,7 @@ export const LoginForm: React.FC = () => {
                     className="w-full bg-teacher hover:bg-teacher/90 text-teacher-foreground"
                     disabled={loading}
                   >
-                    {loading ? (isSignupMode ? 'Signing up...' : 'Signing in...') : (isSignupMode ? 'Sign Up as Teacher' : 'Sign In as Teacher')}
+                    {loading ? (isSignupMode ? 'Signing up...' : 'Signing in...') : (isSignupMode ? 'Sign Up as Staff' : 'Sign In as Staff')}
                   </Button>
                   
                   {!isSignupMode && (

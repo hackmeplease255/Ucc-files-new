@@ -15,6 +15,7 @@ interface Issue {
   id: number;
   title: string;
   description: string;
+  category: string;
   status: string;
   created_at: string;
   is_read: boolean;
@@ -43,6 +44,17 @@ interface AdminMessage {
   message: string;
   is_read: boolean;
   created_at: string;
+  issue_id?: number;
+  issues?: {
+    id: number;
+    title: string;
+    category: string;
+    student_id: number;
+    students: {
+      name: string;
+      university_registration_number: string;
+    };
+  };
 }
 
 export const TeacherDashboard: React.FC = () => {
@@ -86,6 +98,7 @@ export const TeacherDashboard: React.FC = () => {
           created_at
         )
       `)
+      .neq('category', 'Sexual harassment/And other private issues')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -250,10 +263,39 @@ export const TeacherDashboard: React.FC = () => {
         description: "Failed to fetch admin messages",
         variant: "destructive",
       });
-    } else {
-      setAdminMessages(data || []);
-      setUnreadMessageCount(data?.filter(m => !m.is_read).length || 0);
+      return;
     }
+
+    // Fetch issue and student details for messages that have issue_id
+    const messagesWithDetails = await Promise.all(
+      (data || []).map(async (message: any) => {
+        if (message.issue_id) {
+          const { data: issueData } = await supabase
+            .from('issues')
+            .select(`
+              id,
+              title,
+              category,
+              student_id,
+              students (
+                name,
+                university_registration_number
+              )
+            `)
+            .eq('id', message.issue_id)
+            .single();
+
+          return {
+            ...message,
+            issues: issueData
+          };
+        }
+        return message;
+      })
+    );
+
+    setAdminMessages(messagesWithDetails);
+    setUnreadMessageCount(messagesWithDetails?.filter((m: any) => !m.is_read).length || 0);
   };
 
   const markMessagesAsRead = async () => {
@@ -303,7 +345,10 @@ export const TeacherDashboard: React.FC = () => {
             Student ID: {issue.student_id} • {new Date(issue.created_at).toLocaleDateString()}
           </p>
         </div>
-        <div className="flex gap-2 flex-shrink-0">
+        <div className="flex gap-2 flex-shrink-0 flex-wrap">
+          <Badge variant="outline" className="text-xs break-words max-w-full">
+            {issue.category}
+          </Badge>
           <Badge variant={issue.read_count === 0 ? "destructive" : "secondary"}>
             {issue.read_count === 0 ? "Unread" : `Read by ${issue.read_count}`}
           </Badge>
@@ -320,7 +365,7 @@ export const TeacherDashboard: React.FC = () => {
           {issue.issue_reactions.map((reaction) => (
             <Badge key={reaction.id} variant="outline" className="gap-1">
               {getReactionIcon(reaction.reaction_type)}
-              <span className="text-xs">Teacher</span>
+              <span className="text-xs">Staff</span>
             </Badge>
           ))}
         </div>
@@ -333,7 +378,7 @@ export const TeacherDashboard: React.FC = () => {
           {issue.issue_replies.map((reply) => (
             <div key={reply.id} className="bg-muted/50 rounded-lg p-3 space-y-2">
               <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">Teacher</span>
+                <span className="text-sm font-medium">Staff</span>
                 <span className="text-xs text-muted-foreground">
                   {new Date(reply.created_at).toLocaleDateString()}
                 </span>
@@ -438,7 +483,7 @@ export const TeacherDashboard: React.FC = () => {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold">Welcome, {user?.name}!</h1>
-            <p className="text-muted-foreground">Teacher Dashboard</p>
+            <p className="text-muted-foreground">Staff Dashboard</p>
           </div>
           <div className="flex gap-2">
             <Dialog open={showMessagesDialog} onOpenChange={setShowMessagesDialog}>
@@ -472,6 +517,22 @@ export const TeacherDashboard: React.FC = () => {
                         key={message.id} 
                         className={`border rounded-lg p-4 ${!message.is_read ? 'bg-accent/10 border-accent' : 'bg-muted/30'}`}
                       >
+                        {message.issues && (
+                          <div className="mb-3 pb-3 border-b">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge variant="outline" className="text-xs">
+                                Issue #{message.issues.id}
+                              </Badge>
+                              <Badge variant="secondary" className="text-xs">
+                                {message.issues.category}
+                              </Badge>
+                            </div>
+                            <p className="text-sm font-medium mb-1">{message.issues.title}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Student: {message.issues.students?.name} ({message.issues.students?.university_registration_number})
+                            </p>
+                          </div>
+                        )}
                         <div className="flex justify-between items-center mb-2">
                           <span className="text-xs text-muted-foreground">
                             {new Date(message.created_at).toLocaleDateString()} at {new Date(message.created_at).toLocaleTimeString()}
@@ -480,7 +541,10 @@ export const TeacherDashboard: React.FC = () => {
                             <Badge variant="destructive" className="text-xs">New</Badge>
                           )}
                         </div>
-                        <p className="text-sm break-words whitespace-pre-wrap">{message.message}</p>
+                        <p className="text-sm break-words whitespace-pre-wrap font-medium">
+                          Admin Message:
+                        </p>
+                        <p className="text-sm break-words whitespace-pre-wrap mt-1">{message.message}</p>
                       </div>
                     ))
                   )}

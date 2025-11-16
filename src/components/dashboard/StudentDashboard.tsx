@@ -14,6 +14,7 @@ interface Issue {
   id: number;
   title: string;
   description: string;
+  category: string;
   status: string;
   created_at: string;
   is_read: boolean;
@@ -34,10 +35,20 @@ export const StudentDashboard: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
-    description: ''
+    description: '',
+    category: 'Other'
   });
   const [loading, setLoading] = useState(false);
   const [expandedIssue, setExpandedIssue] = useState<number | null>(null);
+
+  const categories = [
+    'Academic issue',
+    'Behavioural issue',
+    'Sexual harassment/And other private issues',
+    'Administration issue',
+    'Financial/fees issue',
+    'Other'
+  ];
 
   useEffect(() => {
     fetchIssues();
@@ -104,7 +115,8 @@ export const StudentDashboard: React.FC = () => {
       .insert({
         student_id: user.id,
         title: formData.title,
-        description: formData.description
+        description: formData.description,
+        category: formData.category
       });
 
     if (error) {
@@ -118,7 +130,7 @@ export const StudentDashboard: React.FC = () => {
         title: "Success",
         description: "Issue submitted successfully",
       });
-      setFormData({ title: '', description: '' });
+      setFormData({ title: '', description: '', category: 'Other' });
       setShowForm(false);
       fetchIssues();
     }
@@ -214,6 +226,22 @@ export const StudentDashboard: React.FC = () => {
               <CardContent>
                 <form onSubmit={handleSubmitIssue} className="space-y-4">
                   <div className="space-y-2">
+                    <Label htmlFor="category">Issue Category</Label>
+                    <select
+                      id="category"
+                      value={formData.category}
+                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                      className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-input"
+                      required
+                    >
+                      {categories.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
                     <Label htmlFor="title">Issue Title</Label>
                     <Input
                       id="title"
@@ -285,6 +313,9 @@ export const StudentDashboard: React.FC = () => {
                           <h3 className="font-semibold break-words">{issue.title}</h3>
                         </div>
                         <div className="flex gap-2 flex-shrink-0">
+                          <Badge variant="outline" className="text-xs break-words max-w-full">
+                            {issue.category}
+                          </Badge>
                           <Badge variant={getStatusVariant(issue)}>
                             {getStatusDisplay(issue)}
                           </Badge>
@@ -315,11 +346,11 @@ export const StudentDashboard: React.FC = () => {
                             
                             {issue.issue_replies && issue.issue_replies.length > 0 && (
                               <div className="space-y-3">
-                                <h4 className="font-medium text-sm">Teacher Responses:</h4>
+                                <h4 className="font-medium text-sm">{issue.category === 'Sexual harassment/And other private issues' ? 'Admin' : 'Staff'} Responses:</h4>
                                 {issue.issue_replies.map((reply) => (
                                   <div key={reply.id} className="bg-muted/50 rounded-lg p-3 space-y-2">
                                     <div className="flex justify-between items-center">
-                                      <span className="text-sm font-medium">Teacher</span>
+                                      <span className="text-sm font-medium">{reply.author_type === 'admin' ? 'Admin' : 'Staff'}</span>
                                       <span className="text-xs text-muted-foreground">
                                         {new Date(reply.created_at).toLocaleDateString()}
                                       </span>
@@ -338,7 +369,7 @@ export const StudentDashboard: React.FC = () => {
                         {issue.read_count > 0 && (
                           <div className="flex items-center gap-1">
                             <Eye className="h-3 w-3" />
-                            <span>{issue.read_count} teacher{issue.read_count !== 1 ? 's' : ''} viewed</span>
+                            <span>{issue.read_count} {issue.category === 'Sexual harassment/And other private issues' ? 'admin' : 'staff'}{issue.read_count !== 1 ? 's' : ''} viewed</span>
                           </div>
                         )}
                       </div>

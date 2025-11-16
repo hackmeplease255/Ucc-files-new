@@ -88,7 +88,7 @@ export const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({ onBack }
         <Tabs defaultValue="student" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="student">Student</TabsTrigger>
-            <TabsTrigger value="teacher">Teacher</TabsTrigger>
+            <TabsTrigger value="teacher">Staff</TabsTrigger>
           </TabsList>
           
           <TabsContent value="student">
